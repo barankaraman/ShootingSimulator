@@ -1,0 +1,3 @@
+/Users/krmn/CLionProjects/ShootingSimulator/cmake-build-debug/CMakeFiles/IronManShooter.dir
+/Users/krmn/CLionProjects/ShootingSimulator/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/krmn/CLionProjects/ShootingSimulator/cmake-build-debug/CMakeFiles/rebuild_cache.dir
