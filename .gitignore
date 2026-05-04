@@ -1,0 +1,12 @@
+# Build output
+build/
+cmake-build-debug/
+cmake-build-make/
+
+# vcpkg (local install)
+vcpkg/
+
+# IDE
+.idea/
+.vs/
+*.user

@@ -30,10 +30,24 @@
 #include <cstring>
 #include <cmath>
 #include <cstdio>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+#include <filesystem>
+
+#ifdef _WIN32
+  #ifndef NOMINMAX
+    #define NOMINMAX
+  #endif
+  #include <WinSock2.h>
+  #include <WS2tcpip.h>
+  #pragma comment(lib, "ws2_32.lib")
+  #include <Windows.h>
+  #include <mmsystem.h>
+  #pragma comment(lib, "winmm.lib")
+#else
+  #include <sys/socket.h>
+  #include <netinet/in.h>
+  #include <arpa/inet.h>
+  #include <unistd.h>
+#endif
 
 // ═══════════════════════════════════════════════════════════════
 //  Sabitler
@@ -44,7 +58,11 @@ static constexpr int   UDP_PORT  = 5005;
 static constexpr int   BUF_SIZE  = 512;
 static constexpr int   TARGET_N  = 8;
 static constexpr float RESPAWN_T = 3.5f;
+#ifdef _WIN32
+static const char* FONT_PATH = "C:\\Windows\\Fonts\\arial.ttf";
+#else
 static const char* FONT_PATH = "/System/Library/Fonts/Supplemental/Arial.ttf";
+#endif
 static const char* LASER_WAV = "assets/sounds/laser.wav";
 
 // ── Model yolları ─────────────────────────────────────────────
@@ -80,13 +98,29 @@ static int   findI(const char* s,const char* k){const char* p=strstr(s,k);if(!p)
 static bool  findB(const char* s,const char* k){const char* p=strstr(s,k);if(!p)return false;p+=strlen(k);while(*p==':'||*p==' ')++p;return strncmp(p,"true",4)==0;}
 
 static void udpThread() {
+#ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2,2), &wsaData) != 0) return;
+    SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock == INVALID_SOCKET) { WSACleanup(); return; }
+    sockaddr_in a{}; a.sin_family=AF_INET; a.sin_addr.s_addr=INADDR_ANY; a.sin_port=htons(UDP_PORT);
+    if (bind(sock,(sockaddr*)&a,sizeof(a))==SOCKET_ERROR){ closesocket(sock); WSACleanup(); return; }
+    DWORD timeout = 100; // milliseconds
+    setsockopt(sock,SOL_SOCKET,SO_RCVTIMEO,(const char*)&timeout,sizeof(timeout));
+#else
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock < 0) return;
     sockaddr_in a{}; a.sin_family=AF_INET; a.sin_addr.s_addr=INADDR_ANY; a.sin_port=htons(UDP_PORT);
     if (bind(sock,(sockaddr*)&a,sizeof(a))<0){ close(sock); return; }
     timeval tv{0,100000}; setsockopt(sock,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));
+#endif
     std::cout<<"[UDP] Port "<<UDP_PORT<<" dinleniyor\n";
-    char buf[BUF_SIZE]; sockaddr_in fr{}; socklen_t fl=sizeof(fr);
+    char buf[BUF_SIZE]; sockaddr_in fr{};
+#ifdef _WIN32
+    int fl=sizeof(fr);
+#else
+    socklen_t fl=sizeof(fr);
+#endif
     while(g_running){
         int n=(int)recvfrom(sock,buf,BUF_SIZE-1,0,(sockaddr*)&fr,&fl);
         if(n>0){ buf[n]='\0'; HandData d;
@@ -94,14 +128,19 @@ static void udpThread() {
             d.state=findI(buf,"\"state\""); d.detected=findB(buf,"\"detected\"");
             std::lock_guard<std::mutex> lk(g_mu); g_hand=d; }
     }
+#ifdef _WIN32
+    closesocket(sock);
+    WSACleanup();
+#else
     close(sock);
+#endif
 }
 
 // ═══════════════════════════════════════════════════════════════
 //  Ses sistemi — laser.wav oluştur + çal
 // ═══════════════════════════════════════════════════════════════
 static void generateLaserWav() {
-    system("mkdir -p assets/sounds");
+    std::filesystem::create_directories("assets/sounds");
     const int SR = 22050, SAMPLES = SR * 28 / 100; // 280ms
     std::vector<int16_t> pcm(SAMPLES);
     float phase = 0;
@@ -127,7 +166,11 @@ static void generateLaserWav() {
 }
 
 static void playLaser() {
+#ifdef _WIN32
+    PlaySoundA(LASER_WAV, NULL, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+#else
     std::thread([]{ system("afplay -v 0.85 assets/sounds/laser.wav"); }).detach();
+#endif
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -593,7 +636,9 @@ int main(){
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,3);
     glfwWindowHint(GLFW_OPENGL_PROFILE,GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT,GL_TRUE);
+#endif
     glfwWindowHint(GLFW_SAMPLES,4);
 
     GLFWwindow* win=glfwCreateWindow(WIN_W,WIN_H,"Iron Man Hand Shooter — NYC",nullptr,nullptr);
