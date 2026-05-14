@@ -1,0 +1,6 @@
+@echo off
+echo Starting the Hand Tracker...
+start cmd /k "python tracker\hand_tracker.py"
+
+echo Starting the IronManShooter Game...
+start "" ".\build\Release\IronManShooter.exe"

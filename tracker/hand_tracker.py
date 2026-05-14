@@ -99,9 +99,10 @@ def main():
         print("[HATA] Kamera açılamadı!")
         return
 
-    print(f"[OK] Hand Tracker başlatıldı → UDP {UDP_IP}:{UDP_PORT}")
+    print(f"[OK] Hand Tracker başlatıldı -> UDP {UDP_IP}:{UDP_PORT}")
 
     with mp_vision.HandLandmarker.create_from_options(options) as detector:
+        last_timestamp_ms = 0
         while cap.isOpened():
             ok, frame = cap.read()
             if not ok:
@@ -116,6 +117,10 @@ def main():
 
             # VIDEO modunda timestamp vermek zorunlu (ms cinsinden monoton artmalı)
             timestamp_ms = int(time.monotonic() * 1000)
+            if timestamp_ms <= last_timestamp_ms:
+                timestamp_ms = last_timestamp_ms + 1
+            last_timestamp_ms = timestamp_ms
+            
             result = detector.detect_for_video(mp_image, timestamp_ms)
 
             data = {"x": 0.5, "y": 0.5, "state": 0, "detected": False}
