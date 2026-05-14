@@ -630,7 +630,7 @@ static void onResize(GLFWwindow*,int W,int H){ if(H>0) glViewport(0,0,W,H); }
 // ═══════════════════════════════════════════════════════════════
 int main(){
     // Laser WAV oluştur
-    generateLaserWav();
+    // generateLaserWav(); // <-- Commented out to prevent overwriting custom sound files
 
     if(!glfwInit()){ std::cerr<<"GLFW hatası\n"; return -1; }
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,3);
