@@ -60,9 +60,9 @@ static constexpr int BUF_SIZE = 512;
 static constexpr int TARGET_N = 8;
 static constexpr float RESPAWN_T = 3.5f;
 #ifdef _WIN32
-static const char *FONT_PATH = "C:\\Windows\\Fonts\\arial.ttf";
+static const char *FONT_PATH = "C:\\Windows\\Fonts\\arialbd.ttf";
 #else
-static const char *FONT_PATH = "/System/Library/Fonts/Supplemental/Arial.ttf";
+static const char *FONT_PATH = "/System/Library/Fonts/Supplemental/Arial Bold.ttf";
 #endif
 static const char *LASER_WAV = "assets/sounds/laser.wav";
 
@@ -553,10 +553,10 @@ struct TextRenderer {
       float sx0 = px + (q.x0 - px) * scale, sx1 = px + (q.x1 - px) * scale;
       float sy0 = py + (q.y0 - py) * scale, sy1 = py + (q.y1 - py) * scale;
       float v[] = {
-          nx(sx0), ny(sy0),    q.s0,    1.f - q.t0, nx(sx1), ny(sy0),
-          q.s1,    1.f - q.t0, nx(sx1), ny(sy1),    q.s1,    1.f - q.t1,
-          nx(sx0), ny(sy0),    q.s0,    1.f - q.t0, nx(sx1), ny(sy1),
-          q.s1,    1.f - q.t1, nx(sx0), ny(sy1),    q.s0,    1.f - q.t1,
+          nx(sx0), ny(sy0),    q.s0,    q.t0, nx(sx1), ny(sy0),
+          q.s1,    q.t0, nx(sx1), ny(sy1),    q.s1,    q.t1,
+          nx(sx0), ny(sy0),    q.s0,    q.t0, nx(sx1), ny(sy1),
+          q.s1,    q.t1, nx(sx0), ny(sy1),    q.s0,    q.t1,
       };
       glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(v), v);
       glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -822,7 +822,7 @@ int main() {
   glfwWindowHint(GLFW_SAMPLES, 4);
 
   GLFWwindow *win = glfwCreateWindow(
-      WIN_W, WIN_H, "Iron Man Hand Shooter — NYC", nullptr, nullptr);
+      WIN_W, WIN_H, "IRONMAN SHOOTER", nullptr, nullptr);
   if (!win) {
     glfwTerminate();
     return -1;
@@ -904,8 +904,10 @@ int main() {
   // ── Oyun durumu ───────────────────────────────────────────
   GameState state = GameState::MENU;
   int score = 0;
+  int shotsFired = 0;
+  int totalHits = 0;
   int gameDuration = 60; // settings'den değiştirilir
-  float timeLeft = gameDuration;
+  float timeLeft = (float)gameDuration;
   bool prevFist = false;
   float gameTime = 0.f;
   float hitTextAlpha = 0.f; // "HIT!" efekti
@@ -1079,18 +1081,29 @@ int main() {
     }
   };
 
-  // Buton çizimi: arka plan + metin
+  // Buton çizimi: arka plan + metin (border + glow on hover)
   auto drawButton = [&](float x, float y, float w, float h,
                         const std::string &label, bool hover,
                         bool selected = false) {
-    glm::vec4 bgCol = selected ? glm::vec4(0.9f, 0.6f, 0.0f, 0.90f)
-                      : hover  ? glm::vec4(0.4f, 0.4f, 0.5f, 0.85f)
-                               : glm::vec4(0.15f, 0.15f, 0.20f, 0.80f);
+    // Border glow
+    if (hover || selected) {
+      glm::vec4 borderCol = selected ? glm::vec4(1.0f, 0.7f, 0.1f, 0.60f)
+                                     : glm::vec4(0.5f, 0.6f, 0.8f, 0.45f);
+      drawRect(uiSh, x - 3, y - 3, w + 6, h + 6, borderCol);
+    }
+    glm::vec4 bgCol = selected ? glm::vec4(0.9f, 0.6f, 0.0f, 0.92f)
+                      : hover  ? glm::vec4(0.35f, 0.38f, 0.50f, 0.90f)
+                               : glm::vec4(0.12f, 0.12f, 0.18f, 0.85f);
     glDisable(GL_DEPTH_TEST);
     drawRect(uiSh, x, y, w, h, bgCol);
-    float tw = txr.measure(label) * 0.75f;
-    float tx = x + (w - tw) * 0.5f, ty = y + (h + 52.f * 0.75f * 0.5f) * 0.5f;
-    txr.draw(textSh, label, tx, ty, 0.75f, {1, 1, 1, 1});
+    float textScale = 0.82f;
+    float tw = txr.measure(label) * textScale;
+    float tx = x + (w - tw) * 0.5f;
+    float ty = y + (h + 52.f * textScale * 0.5f) * 0.5f;
+    glm::vec4 textCol = selected ? glm::vec4(0.0f, 0.0f, 0.0f, 1.0f)
+                        : hover  ? glm::vec4(1.0f, 0.9f, 0.7f, 1.0f)
+                                 : glm::vec4(0.9f, 0.9f, 0.95f, 1.0f);
+    txr.draw(textSh, label, tx, ty, textScale, textCol);
     glEnable(GL_DEPTH_TEST);
   };
 
@@ -1128,25 +1141,29 @@ int main() {
       drawScene(gameTime);
       glDisable(GL_DEPTH_TEST);
       // Koyu overlay
-      drawRect(uiSh, 0, 0, WIN_W, WIN_H, {0.0f, 0.0f, 0.05f, 0.62f});
+      drawRect(uiSh, 0, 0, WIN_W, WIN_H, {0.0f, 0.0f, 0.05f, 0.68f});
 
-      // Başlık
-      float titleScale = 1.6f;
-      std::string title = "IRON MAN HAND SHOOTER";
+      // Başlık — "IRONMAN SHOOTER"
+      float titleScale = 1.8f;
+      std::string title = "IRONMAN SHOOTER";
       float tw = txr.measure(title) * titleScale;
-      txr.draw(textSh, title, (WIN_W - tw) * 0.5f, WIN_H * 0.22f, titleScale,
-               {0.9f, 0.55f, 0.0f, 1.0f});
+      // Draw shadow first
+      txr.draw(textSh, title, (WIN_W - tw) * 0.5f + 3.f, WIN_H * 0.18f + 3.f, titleScale,
+               {0.0f, 0.0f, 0.0f, 0.75f});
+      // Draw main title in vibrant Ironman neon orange-red
+      txr.draw(textSh, title, (WIN_W - tw) * 0.5f, WIN_H * 0.18f, titleScale,
+               {1.0f, 0.25f, 0.0f, 1.0f});
 
-      // Butonlar
-      float bx = (WIN_W - 320.f) * 0.5f, by = WIN_H * 0.38f, bw = 320.f,
-            bh = 68.f, gap = 18.f;
+      // Butonlar — bigger, with clear labels
+      float bw = 360.f, bh = 72.f, gap = 22.f;
+      float bx = (WIN_W - bw) * 0.5f, by = WIN_H * 0.38f;
       bool hStart = (mx >= bx && mx <= bx + bw && my >= by && my <= by + bh);
       bool hSet = (mx >= bx && mx <= bx + bw && my >= by + bh + gap &&
                    my <= by + bh * 2 + gap);
       bool hExit = (mx >= bx && mx <= bx + bw && my >= by + (bh + gap) * 2 &&
                     my <= by + (bh + gap) * 2 + bh);
 
-      drawButton(bx, by, bw, bh, "START", hStart);
+      drawButton(bx, by, bw, bh, "START GAME", hStart);
       drawButton(bx, by + bh + gap, bw, bh, "SETTINGS", hSet);
       drawButton(bx, by + (bh + gap) * 2, bw, bh, "EXIT", hExit);
 
@@ -1154,7 +1171,9 @@ int main() {
         if (hStart) {
           // Oyunu başlat
           score = 0;
-          timeLeft = gameDuration;
+          shotsFired = 0;
+          totalHits = 0;
+          timeLeft = (float)gameDuration;
           prevFist = false;
           hitTextAlpha = 0;
           for (int i = 0; i < TARGET_N; ++i)
@@ -1183,8 +1202,12 @@ int main() {
 
       std::string stitle = "SETTINGS";
       float stw = txr.measure(stitle) * 1.2f;
+      // Draw shadow first
+      txr.draw(textSh, stitle, (WIN_W - stw) * 0.5f + 2.f, WIN_H * 0.22f + 2.f, 1.2f,
+               {0.0f, 0.0f, 0.0f, 0.75f});
+      // Draw main title in bright gaming gold
       txr.draw(textSh, stitle, (WIN_W - stw) * 0.5f, WIN_H * 0.22f, 1.2f,
-               {0.9f, 0.55f, 0.0f, 1.0f});
+               {1.0f, 0.75f, 0.0f, 1.0f});
 
       std::string dlbl = "GAME DURATION";
       float dtw = txr.measure(dlbl) * 0.85f;
@@ -1226,36 +1249,98 @@ int main() {
       glfwSetInputMode(win, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
       drawScene(gameTime);
       glDisable(GL_DEPTH_TEST);
-      drawRect(uiSh, 0, 0, WIN_W, WIN_H, {0.0f, 0.0f, 0.0f, 0.72f});
+      drawRect(uiSh, 0, 0, WIN_W, WIN_H, {0.0f, 0.0f, 0.0f, 0.78f});
 
+      // GAME OVER title
       std::string go = "GAME OVER";
-      float gs = 1.8f, gtw = txr.measure(go) * gs;
-      txr.draw(textSh, go, (WIN_W - gtw) * 0.5f, WIN_H * 0.28f, gs,
-               {0.9f, 0.1f, 0.1f, 1.0f});
+      float gs = 2.0f, gtw = txr.measure(go) * gs;
+      // Draw shadow first
+      txr.draw(textSh, go, (WIN_W - gtw) * 0.5f + 3.f, WIN_H * 0.15f + 3.f, gs,
+               {0.0f, 0.0f, 0.0f, 0.75f});
+      // Draw main title in gamer red
+      txr.draw(textSh, go, (WIN_W - gtw) * 0.5f, WIN_H * 0.15f, gs,
+               {1.0f, 0.1f, 0.1f, 1.0f});
 
-      std::string sc = "Score: " + std::to_string(score);
-      float ss = 1.2f, stw = txr.measure(sc) * ss;
-      txr.draw(textSh, sc, (WIN_W - stw) * 0.5f, WIN_H * 0.42f, ss,
+      // Decorative line under title
+      drawRect(uiSh, (WIN_W - 400.f) * 0.5f, WIN_H * 0.19f, 400.f, 3.f,
+               {1.0f, 0.5f, 0.1f, 0.7f});
+
+      // Stats panel background
+      float panelX = (WIN_W - 500.f) * 0.5f, panelY = WIN_H * 0.24f;
+      drawRect(uiSh, panelX, panelY, 500.f, 250.f,
+               {0.08f, 0.08f, 0.15f, 0.85f});
+
+      // Models Hit (score)
+      float rowY = panelY + 30.f;
+      float labelScale = 0.80f;
+      std::string lbl1 = "MODELS HIT";
+      txr.draw(textSh, lbl1, panelX + 40.f, rowY + 40.f, labelScale,
+               {0.7f, 0.7f, 0.75f, 1.0f});
+      std::string val1 = std::to_string(totalHits);
+      float v1w = txr.measure(val1) * 1.1f;
+      txr.draw(textSh, val1, panelX + 500.f - 40.f - v1w, rowY + 40.f, 1.1f,
                {1.0f, 0.85f, 0.2f, 1.0f});
 
-      std::string msg = (score >= 20)   ? "Excellent!"
-                        : (score >= 10) ? "Well done!"
-                                        : "Keep training!";
-      float ms = 0.85f, mtw = txr.measure(msg) * ms;
-      txr.draw(textSh, msg, (WIN_W - mtw) * 0.5f, WIN_H * 0.50f, ms,
-               {0.75f, 0.75f, 0.75f, 1.0f});
+      // Total Shots
+      rowY += 55.f;
+      std::string lbl2 = "TOTAL SHOTS";
+      txr.draw(textSh, lbl2, panelX + 40.f, rowY + 40.f, labelScale,
+               {0.7f, 0.7f, 0.75f, 1.0f});
+      std::string val2 = std::to_string(shotsFired);
+      float v2w = txr.measure(val2) * 1.1f;
+      txr.draw(textSh, val2, panelX + 500.f - 40.f - v2w, rowY + 40.f, 1.1f,
+               {1.0f, 0.85f, 0.2f, 1.0f});
 
-      float bx = (WIN_W - 260.f) * 0.5f, by = WIN_H * 0.60f;
+      // Accuracy
+      rowY += 55.f;
+      float accuracy = (shotsFired > 0) ? std::min((float)totalHits / (float)shotsFired * 100.f, 100.f) : 0.f;
+      char accBuf[32];
+      snprintf(accBuf, sizeof(accBuf), "%.1f%%", accuracy);
+      std::string lbl3 = "ACCURACY";
+      txr.draw(textSh, lbl3, panelX + 40.f, rowY + 40.f, labelScale,
+               {0.7f, 0.7f, 0.75f, 1.0f});
+      std::string val3 = accBuf;
+      float v3w = txr.measure(val3) * 1.1f;
+      glm::vec4 accColor = (accuracy >= 50.f) ? glm::vec4(0.2f, 1.0f, 0.3f, 1.0f)
+                           : (accuracy >= 25.f) ? glm::vec4(1.0f, 0.85f, 0.2f, 1.0f)
+                                                : glm::vec4(1.0f, 0.3f, 0.2f, 1.0f);
+      txr.draw(textSh, val3, panelX + 500.f - 40.f - v3w, rowY + 40.f, 1.1f,
+               accColor);
+
+      // Score
+      rowY += 55.f;
+      std::string lbl4 = "FINAL SCORE";
+      txr.draw(textSh, lbl4, panelX + 40.f, rowY + 40.f, labelScale,
+               {0.7f, 0.7f, 0.75f, 1.0f});
+      std::string val4 = std::to_string(score);
+      float v4w = txr.measure(val4) * 1.1f;
+      txr.draw(textSh, val4, panelX + 500.f - 40.f - v4w, rowY + 40.f, 1.1f,
+               {1.0f, 0.85f, 0.2f, 1.0f});
+
+      // Performance message
+      std::string msg = (score >= 2000) ? "Outstanding Performance!"
+                        : (score >= 1000) ? "Well Done, Avenger!"
+                        : (score >= 500)  ? "Keep Training!"
+                                          : "Suit Needs Calibration!";
+      float ms = 0.80f, mtw = txr.measure(msg) * ms;
+      txr.draw(textSh, msg, (WIN_W - mtw) * 0.5f, panelY + 265.f, ms,
+               {0.85f, 0.85f, 0.90f, 0.9f});
+
+      // Buttons
+      float bbw = 300.f, bbh = 68.f;
+      float bx = (WIN_W - bbw) * 0.5f, by = WIN_H * 0.72f;
       bool hAgain =
-          (mx >= bx && mx <= bx + 260.f && my >= by && my <= by + 64.f);
+          (mx >= bx && mx <= bx + bbw && my >= by && my <= by + bbh);
       bool hMenu =
-          (mx >= bx && mx <= bx + 260.f && my >= by + 84.f && my <= by + 148.f);
-      drawButton(bx, by, 260.f, 64.f, "PLAY AGAIN", hAgain);
-      drawButton(bx, by + 84.f, 260.f, 64.f, "MAIN MENU", hMenu);
+          (mx >= bx && mx <= bx + bbw && my >= by + bbh + 18.f && my <= by + bbh * 2 + 18.f);
+      drawButton(bx, by, bbw, bbh, "PLAY AGAIN", hAgain);
+      drawButton(bx, by + bbh + 18.f, bbw, bbh, "MAIN MENU", hMenu);
 
       if (lbClick && hAgain) {
         score = 0;
-        timeLeft = gameDuration;
+        shotsFired = 0;
+        totalHits = 0;
+        timeLeft = (float)gameDuration;
         prevFist = false;
         hitTextAlpha = 0;
         for (int i = 0; i < TARGET_N; ++i)
@@ -1289,6 +1374,7 @@ int main() {
     prevFist = curFist;
     if (justFired) {
       playLaser();
+      ++shotsFired;
       weapRecoil = 0.f;     // Restart from original position
       targetRecoil = 0.15f; // Slower kickback target
       beamLife = 1.0f;      // Trigger plasma beam
@@ -1305,7 +1391,8 @@ int main() {
         if (dist < thresh) {
           t.hitFlash = 0.30f;
           t.alive = false;
-          ++score;
+          score += 100;
+          ++totalHits;
           hitTextAlpha = 1.0f;
           std::cout << "HIT! Skor: " << score << "\n";
         }
@@ -1340,25 +1427,61 @@ int main() {
     // ── Crosshair ─────────────────────────────────────────
     glDisable(GL_DEPTH_TEST);
     crossSh.use();
-    crossSh.setVec2("uOffset", {ndcX, ndcY});
+    glBindVertexArray(crossVAO);
+
+    // Draw shadow/outline first (4 offset draws in black)
+    float shadowOffset = 0.0025f;
     crossSh.setFloat("uScale", 1.0f);
+    crossSh.setVec4("uColor", glm::vec4(0.f, 0.f, 0.f, 0.85f));
+    glLineWidth(3.f);
+
+    crossSh.setVec2("uOffset", {ndcX - shadowOffset, ndcY - shadowOffset});
+    glDrawArrays(GL_LINES, 0, crossN);
+
+    crossSh.setVec2("uOffset", {ndcX + shadowOffset, ndcY - shadowOffset});
+    glDrawArrays(GL_LINES, 0, crossN);
+
+    crossSh.setVec2("uOffset", {ndcX - shadowOffset, ndcY + shadowOffset});
+    glDrawArrays(GL_LINES, 0, crossN);
+
+    crossSh.setVec2("uOffset", {ndcX + shadowOffset, ndcY + shadowOffset});
+    glDrawArrays(GL_LINES, 0, crossN);
+
+    // Draw main crosshair
+    crossSh.setVec2("uOffset", {ndcX, ndcY});
     crossSh.setVec4("uColor", curFist ? glm::vec4(1.f, 0.25f, 0.f, 1.f)
                                       : glm::vec4(1.f, 1.f, 1.f, 1.f));
     glLineWidth(2.f);
-    glBindVertexArray(crossVAO);
     glDrawArrays(GL_LINES, 0, crossN);
 
     // ── HUD: Skor (sol üst) ────────────────────────────────
     std::string scoreStr = "SCORE: " + std::to_string(score);
-    txr.draw(textSh, scoreStr, 24.f, 56.f, 0.85f, {1.0f, 0.85f, 0.15f, 1.0f});
+    float scoreScale = 0.85f;
+    float scoreW = txr.measure(scoreStr) * scoreScale;
+    float sPillW = scoreW + 40.f, sPillH = 50.f;
+    float sPillX = 12.f, sPillY = 8.f;
+    drawRect(uiSh, sPillX, sPillY, sPillW, sPillH,
+             {0.0f, 0.0f, 0.0f, 0.55f});
+    txr.draw(textSh, scoreStr, 32.f, 46.f, scoreScale, {1.0f, 0.85f, 0.15f, 1.0f});
 
-    // ── HUD: Zamanlayıcı (sağ üst) ────────────────────────
+    // ── HUD: Zamanlayıcı (top center, prominent) ──────────
     int tSec = (int)std::ceil(timeLeft);
-    std::string timerStr = "TIME: " + std::to_string(tSec) + "s";
-    float timW = txr.measure(timerStr) * 0.85f;
+    int tMin = tSec / 60;
+    int tSecR = tSec % 60;
+    char timBuf[32];
+    snprintf(timBuf, sizeof(timBuf), "%d:%02d", tMin, tSecR);
+    std::string timerStr = timBuf;
+    float timerScale = 1.1f;
+    float timW = txr.measure(timerStr) * timerScale;
+    // Background pill behind timer
+    float pillW = timW + 40.f, pillH = 50.f;
+    float pillX = (WIN_W - pillW) * 0.5f, pillY = 8.f;
+    drawRect(uiSh, pillX, pillY, pillW, pillH,
+             {0.0f, 0.0f, 0.0f, 0.55f});
     glm::vec4 timeCol = (tSec <= 10) ? glm::vec4(1.f, 0.2f, 0.1f, 1.f)
-                                     : glm::vec4(0.85f, 0.85f, 1.f, 1.f);
-    txr.draw(textSh, timerStr, WIN_W - timW - 24.f, 56.f, 0.85f, timeCol);
+                       : (tSec <= 30) ? glm::vec4(1.f, 0.75f, 0.1f, 1.f)
+                                      : glm::vec4(0.9f, 0.95f, 1.f, 1.f);
+    txr.draw(textSh, timerStr, (WIN_W - timW) * 0.5f, 46.f, timerScale, timeCol);
 
     // ── HUD: HIT! yazısı ──────────────────────────────────
     if (hitTextAlpha > 0.01f) {

@@ -174,7 +174,7 @@ private:
 
     static GLuint loadTexture(const std::string& path) {
         int w, h, ch;
-        stbi_set_flip_vertically_on_load(true);
+        stbi_set_flip_vertically_on_load(false);
         unsigned char* data = stbi_load(path.c_str(), &w, &h, &ch, 0);
         if (!data) {
             std::cerr << "[Texture] Bulunamadı: " << path << "\n";
